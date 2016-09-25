@@ -61,6 +61,7 @@ func main() {
             log.Fatal(err)
         }
 
+        targetFolder := filepath.Dir(targetVideo);
         targetFileName := filepath.Base(targetVideo)
         targetFileExt := filepath.Ext(targetVideo)
         targetBaseName := targetFileName[:len(targetFileName)-len(targetFileExt)]
@@ -71,7 +72,7 @@ func main() {
         defer in.Close()
 
         // Create dest subtitle
-        out, err := os.Create(distFolder + targetBaseName + ".srt")
+        out, err := os.Create(targetFolder + "/" + targetBaseName + ".srt")
         if err != nil { log.Fatal(err) }
         defer out.Close()
 
