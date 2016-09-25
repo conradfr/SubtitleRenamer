@@ -9,6 +9,7 @@ import (
     "github.com/sqweek/dialog"
     "github.com/jinzhu/configor"
     "github.com/kardianos/osext"
+    "errors"
 )
 
 const configFileName = "config.yml"
@@ -17,44 +18,61 @@ var Config = struct {
     DistFolder string `yaml:"DistFolder"`
 }{}
 
-func main() {
-    // Ensure a subtitle file has been given
-    // TODO: If not, open a file dialog for selecting one
-    if len(os.Args) < 2 {
-        log.Fatal("No file provided.")
-    }
-
-
-    // Find the config file
-    // Not sure of the best or transparent way to handle differences in current path when executed as executable or go run
-    var configFilePath string;
+// Not sure of the best or transparent way to handle differences in current path when executed as executable or go run
+func getConfigFilePath() (string, error) {
     if _, err := os.Stat(configFileName); os.IsNotExist(err) {
         var execFolder, _ = osext.ExecutableFolder()
         if _, err := os.Stat(execFolder + "/" + configFileName); err == nil {
-            configFilePath = execFolder + "/" + configFileName;
+            return execFolder + "/" + configFileName, nil
         } else {
-            log.Fatal("Config file not found.");
+            return "", errors.New("Config file not found.")
         }
-
     } else {
-        configFilePath = configFileName;
+        return configFileName, nil;
+    }
+}
+
+// Manage config file & get destination folder
+func getDestinationFolder() string {
+    var distFolder string;
+    var configFilePath, err = getConfigFilePath()
+    if err == nil {
+        configor.Load(&Config, configFilePath)
+        distFolder = Config.DistFolder;
+    } else {
+        // Use subtitle's folder as default
+        distFolder = filepath.Dir(os.Args[1])
     }
 
-    // Load conf & ensured distFolder has a trailing backslash
-    configor.Load(&Config, configFilePath)
-
-    var distFolder = Config.DistFolder;
+    // Ensure distFolder has a trailing backslash
     if (distFolder[len(distFolder) - 1:len(distFolder)] != "\\" ) {
         distFolder = distFolder + "\\";
     }
 
+    return distFolder
+}
+
+func main() {
+    // Ensure a subtitle file has been given
+    // TODO: If not, open a file dialog for selecting one
+    if len(os.Args) < 2 {
+        log.Fatal("No subtitle file provided.")
+    }
+
+    // Ensure file exists
+    if _, err := os.Stat(os.Args[1]); os.IsNotExist(err) {
+        log.Fatal("Subtitle file not found")
+    }
+
+    destinationFolder := getDestinationFolder()
+    
     var srtFilePath string = os.Args[1]
     fileExt := filepath.Ext(srtFilePath)
 
     if fileExt == ".srt" {
         // Select file dialog
         var videoDialog = dialog.File()
-        videoDialog.StartDir = distFolder
+        videoDialog.StartDir = destinationFolder
         targetVideo, err := videoDialog.Title("Select target video").Filter("Video file", "*.mkv;*.avi;*.mp4").Load()
 
         if err != nil {
@@ -71,7 +89,7 @@ func main() {
         if err != nil { log.Fatal(err) }
         defer in.Close()
 
-        // Create dest subtitle
+        // Create destination subtitle
         out, err := os.Create(targetFolder + "/" + targetBaseName + ".srt")
         if err != nil { log.Fatal(err) }
         defer out.Close()
