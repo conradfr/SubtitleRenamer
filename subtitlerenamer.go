@@ -1,3 +1,4 @@
+//go:generate goversioninfo -icon=icon.ico -64=true
 package main
 
 import (
@@ -8,9 +9,15 @@ import (
     "io"
     "github.com/sqweek/dialog"
     "github.com/jinzhu/configor"
-    "github.com/kardianos/osext"
     "errors"
 )
+
+type target struct {
+    folder string
+    fileName string
+    fileExt string
+    baseName string
+}
 
 const configFileName = "config.yml"
 
@@ -21,7 +28,9 @@ var Config = struct {
 // Not sure of the best or transparent way to handle differences in current path when executed as executable or go run
 func getConfigFilePath() (string, error) {
     if _, err := os.Stat(configFileName); os.IsNotExist(err) {
-        var execFolder, _ = osext.ExecutableFolder()
+        ex, _ := os.Executable()
+        execFolder := filepath.Dir(ex)
+
         if _, err := os.Stat(execFolder + "/" + configFileName); err == nil {
             return execFolder + "/" + configFileName, nil
         } else {
@@ -35,7 +44,7 @@ func getConfigFilePath() (string, error) {
 // Manage config file & get destination folder
 func getDestinationFolder() string {
     var distFolder string;
-    var configFilePath, err = getConfigFilePath()
+    configFilePath, err := getConfigFilePath()
     if err == nil {
         configor.Load(&Config, configFilePath)
         distFolder = Config.DistFolder;
@@ -52,6 +61,15 @@ func getDestinationFolder() string {
     return distFolder
 }
 
+func getFinalSrtPath(targetVideo string) string {
+    targetFolder := filepath.Dir(targetVideo);
+    targetFileName := filepath.Base(targetVideo)
+    targetFileExt := filepath.Ext(targetVideo)
+    targetBaseName := targetFileName[:len(targetFileName)-len(targetFileExt)]
+
+    return targetFolder + "/" + targetBaseName + ".srt"
+}
+
 func main() {
     // Ensure a subtitle file has been given
     // TODO: If not, open a file dialog for selecting one
@@ -66,37 +84,33 @@ func main() {
 
     destinationFolder := getDestinationFolder()
     
-    var srtFilePath string = os.Args[1]
+    srtFilePath := os.Args[1]
     fileExt := filepath.Ext(srtFilePath)
 
     if fileExt == ".srt" {
+        // Open original subtitle
+        in, err := os.Open(srtFilePath)
+        if err != nil { log.Fatal(err) }
+        defer in.Close()
+
         // Select file dialog
-        var videoDialog = dialog.File()
+        videoDialog := dialog.File()
         videoDialog.StartDir = destinationFolder
+        //videoDialog.ValidateNames(false)
         targetVideo, err := videoDialog.Title("Select target video").Filter("Video file", "*.mkv;*.avi;*.mp4").Load()
 
         if err != nil {
             log.Fatal(err)
         }
 
-        targetFolder := filepath.Dir(targetVideo);
-        targetFileName := filepath.Base(targetVideo)
-        targetFileExt := filepath.Ext(targetVideo)
-        targetBaseName := targetFileName[:len(targetFileName)-len(targetFileExt)]
-
-        // Open original subtitle
-        in, err := os.Open(srtFilePath)
-        if err != nil { log.Fatal(err) }
-        defer in.Close()
-
         // Create destination subtitle
-        out, err := os.Create(targetFolder + "/" + targetBaseName + ".srt")
+        finalStrPath := getFinalSrtPath(targetVideo)
+        out, err := os.Create(finalStrPath)
         if err != nil { log.Fatal(err) }
         defer out.Close()
 
         // Copy
         _, err = io.Copy(out, in)
-        out.Close()
         if err != nil { log.Fatal(err) }
     } else {
         log.Fatal("Unsupported filetype." + "\n")
