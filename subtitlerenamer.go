@@ -7,7 +7,7 @@ import (
     "log"
     "path/filepath"
     "io"
-    "github.com/sqweek/dialog"
+    "github.com/conradfr/dialog"
     "github.com/jinzhu/configor"
     "errors"
 )
